@@ -1216,6 +1216,10 @@ fn windows_hooks_decode_stdin_as_utf8() {
             include_str!("assets/mastracode/herdr-agent-state.ps1"),
         ),
         (
+            "codebuddy",
+            include_str!("assets/codebuddy/herdr-agent-state.ps1"),
+        ),
+        (
             "qodercli",
             include_str!("assets/qodercli/herdr-agent-state.ps1"),
         ),
@@ -3634,6 +3638,11 @@ fn bundled_integration_asset_versions_match_expected_versions() {
             MASTRACODE_HOOK_ASSET,
             MASTRACODE_INTEGRATION_VERSION,
         ),
+        (
+            "codebuddy",
+            CODEBUDDY_HOOK_ASSET,
+            CODEBUDDY_INTEGRATION_VERSION,
+        ),
         ("grok", GROK_HOOK_ASSET, GROK_INTEGRATION_VERSION),
     ] {
         assert_eq!(
@@ -3650,6 +3659,7 @@ fn process_owned_integration_assets_do_not_report_release() {
         ("pi", PI_EXTENSION_ASSET),
         ("omp", OMP_EXTENSION_ASSET),
         ("mastracode", MASTRACODE_HOOK_ASSET),
+        ("codebuddy", CODEBUDDY_HOOK_ASSET),
         ("kimi", KIMI_HOOK_ASSET),
         ("kilo", KILO_PLUGIN_ASSET),
         ("hermes", HERMES_PLUGIN_INIT_ASSET),
@@ -3962,6 +3972,195 @@ fn install_qodercli_errors_when_config_dir_missing() {
     );
 
     std::env::remove_var(QODERCLI_CONFIG_DIR_ENV_VAR);
+    let _ = fs::remove_dir_all(base);
+}
+
+#[test]
+fn install_codebuddy_writes_hooks_and_preserves_settings() {
+    let _lock = integration_env_lock();
+    let base = unique_base();
+    let codebuddy_dir = base.join(".codebuddy");
+    fs::create_dir_all(&codebuddy_dir).unwrap();
+    fs::write(
+        codebuddy_dir.join("settings.json"),
+        r#"{"permissions":{"allow":["Read"]},"hooks":{}}"#,
+    )
+    .unwrap();
+    std::env::set_var(CODEBUDDY_CONFIG_DIR_ENV_VAR, &codebuddy_dir);
+
+    let installed = install_codebuddy().unwrap();
+
+    assert_eq!(
+        installed.hook_path,
+        codebuddy_dir
+            .join("hooks")
+            .join(CODEBUDDY_HOOK_INSTALL_NAME)
+    );
+    assert_eq!(installed.settings_path, codebuddy_dir.join("settings.json"));
+    assert!(installed.hook_path.is_file());
+
+    let settings: Value =
+        serde_json::from_str(&fs::read_to_string(&installed.settings_path).unwrap()).unwrap();
+    let hooks = settings
+        .get("hooks")
+        .and_then(Value::as_object)
+        .expect("hooks should be present");
+    for (event, action) in CODEBUDDY_HOOK_EVENTS {
+        let entries = hooks[event]
+            .as_array()
+            .unwrap_or_else(|| panic!("expected hooks.{event} to be registered"));
+        assert_eq!(entries.len(), 1, "expected one hooks.{event} entry");
+        let entry = &entries[0];
+        assert_eq!(entry["matcher"].as_str(), Some("*"));
+        let command = entry["hooks"][0]["command"].as_str().unwrap();
+        assert!(
+            command.contains(CODEBUDDY_HOOK_INSTALL_NAME) && command.ends_with(action),
+            "expected codebuddy {event} hook command to end with {action}, got {command}"
+        );
+        // CodeBuddy reads `timeout` in seconds, like Claude Code.
+        assert_eq!(
+            entry["hooks"][0]["timeout"].as_u64(),
+            Some(CODEBUDDY_HOOK_TIMEOUT_SEC)
+        );
+        assert_eq!(entry["hooks"][0]["type"].as_str(), Some("command"));
+    }
+    // Pre-existing settings keys must be preserved.
+    assert!(settings.get("permissions").is_some());
+
+    std::env::remove_var(CODEBUDDY_CONFIG_DIR_ENV_VAR);
+    let _ = fs::remove_dir_all(base);
+}
+
+#[test]
+fn install_codebuddy_is_idempotent_for_hook_entries() {
+    let _lock = integration_env_lock();
+    let base = unique_base();
+    let codebuddy_dir = base.join(".codebuddy");
+    fs::create_dir_all(&codebuddy_dir).unwrap();
+    std::env::set_var(CODEBUDDY_CONFIG_DIR_ENV_VAR, &codebuddy_dir);
+
+    install_codebuddy().unwrap();
+    install_codebuddy().unwrap();
+
+    let settings: Value =
+        serde_json::from_str(&fs::read_to_string(codebuddy_dir.join("settings.json")).unwrap())
+            .unwrap();
+    let hooks = settings.get("hooks").and_then(Value::as_object).unwrap();
+    for (event, _) in CODEBUDDY_HOOK_EVENTS {
+        let entries = hooks.get(event).and_then(Value::as_array).unwrap();
+        assert_eq!(
+            entries.len(),
+            1,
+            "expected hooks.{event} to contain exactly one entry, got {entries:?}"
+        );
+    }
+
+    std::env::remove_var(CODEBUDDY_CONFIG_DIR_ENV_VAR);
+    let _ = fs::remove_dir_all(base);
+}
+
+#[test]
+fn uninstall_codebuddy_removes_herdr_hooks_and_preserves_others() {
+    let _lock = integration_env_lock();
+    let base = unique_base();
+    let codebuddy_dir = base.join(".codebuddy");
+    fs::create_dir_all(&codebuddy_dir).unwrap();
+    std::env::set_var(CODEBUDDY_CONFIG_DIR_ENV_VAR, &codebuddy_dir);
+
+    install_codebuddy().unwrap();
+    // Inject a foreign hook entry the user might have configured by hand.
+    let mut settings: Value =
+        serde_json::from_str(&fs::read_to_string(codebuddy_dir.join("settings.json")).unwrap())
+            .unwrap();
+    settings["hooks"]["SessionStart"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "matcher": "*",
+            "hooks": [{"type": "command", "command": "echo user-defined"}],
+        }));
+    fs::write(
+        codebuddy_dir.join("settings.json"),
+        serde_json::to_string_pretty(&settings).unwrap(),
+    )
+    .unwrap();
+
+    let result = uninstall_codebuddy().unwrap();
+    assert!(result.removed_hook_file);
+    assert!(result.updated_settings);
+
+    let settings: Value =
+        serde_json::from_str(&fs::read_to_string(codebuddy_dir.join("settings.json")).unwrap())
+            .unwrap();
+    let hooks = settings.get("hooks").and_then(Value::as_object).unwrap();
+    let remaining = hooks.get("SessionStart").and_then(Value::as_array).unwrap();
+    assert_eq!(remaining.len(), 1);
+    let cmd = remaining[0]["hooks"][0]["command"].as_str().unwrap();
+    assert_eq!(cmd, "echo user-defined");
+    for (event, _) in CODEBUDDY_HOOK_EVENTS {
+        if event == "SessionStart" {
+            continue;
+        }
+        assert!(
+            !hooks.contains_key(event),
+            "expected hooks.{event} to be removed"
+        );
+    }
+
+    std::env::remove_var(CODEBUDDY_CONFIG_DIR_ENV_VAR);
+    let _ = fs::remove_dir_all(base);
+}
+
+#[test]
+fn install_codebuddy_errors_when_config_dir_missing() {
+    let _lock = integration_env_lock();
+    let base = unique_base();
+    let missing = base.join(".codebuddy");
+    std::env::set_var(CODEBUDDY_CONFIG_DIR_ENV_VAR, &missing);
+
+    let err = install_codebuddy().unwrap_err().to_string();
+    assert!(
+        err.contains("codebuddy config directory not found"),
+        "unexpected error: {err}"
+    );
+
+    std::env::remove_var(CODEBUDDY_CONFIG_DIR_ENV_VAR);
+    let _ = fs::remove_dir_all(base);
+}
+
+#[test]
+fn codebuddy_experimental_status_tracks_the_installed_hook() {
+    let _lock = integration_env_lock();
+    let base = unique_base();
+    let codebuddy_dir = base.join(".codebuddy");
+    fs::create_dir_all(&codebuddy_dir).unwrap();
+    std::env::set_var(CODEBUDDY_CONFIG_DIR_ENV_VAR, &codebuddy_dir);
+
+    let before = experimental_codebuddy_integration_status().unwrap();
+    assert_eq!(before.label, "codebuddy");
+    assert_eq!(before.expected_version, CODEBUDDY_INTEGRATION_VERSION);
+    assert_eq!(before.state, IntegrationStatusKind::NotInstalled);
+
+    install_codebuddy().unwrap();
+    let current = experimental_codebuddy_integration_status().unwrap();
+    assert_eq!(current.state, IntegrationStatusKind::Current);
+    assert_eq!(
+        current.installed_version,
+        Some(CODEBUDDY_INTEGRATION_VERSION)
+    );
+    assert_eq!(
+        current.path,
+        codebuddy_dir
+            .join("hooks")
+            .join(CODEBUDDY_HOOK_INSTALL_NAME)
+    );
+
+    uninstall_codebuddy().unwrap();
+    let after = experimental_codebuddy_integration_status().unwrap();
+    assert_eq!(after.state, IntegrationStatusKind::NotInstalled);
+    assert_eq!(after.installed_version, None);
+
+    std::env::remove_var(CODEBUDDY_CONFIG_DIR_ENV_VAR);
     let _ = fs::remove_dir_all(base);
 }
 

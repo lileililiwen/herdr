@@ -1369,7 +1369,10 @@ impl TerminalState {
         session_ref: &crate::agent_resume::AgentSessionRef,
     ) -> bool {
         self.hook_authority.is_none()
-            && (source, agent_label) == ("herdr:mastracode", "mastracode")
+            && matches!(
+                (source, agent_label),
+                ("herdr:mastracode", "mastracode") | ("herdr:codebuddy", "codebuddy")
+            )
             && self
                 .persisted_agent_session
                 .as_ref()
@@ -1398,6 +1401,11 @@ impl TerminalState {
                 "codex",
                 Some("startup" | "clear" | "resume" | "compact")
             ) | ("herdr:mastracode", "mastracode", Some("startup"))
+                | (
+                    "herdr:codebuddy",
+                    "codebuddy",
+                    Some("startup" | "clear" | "resume" | "compact")
+                )
                 | ("herdr:hermes", "hermes", Some("startup" | "new" | "resume"))
                 | ("herdr:opencode", "opencode", Some("select"))
                 | ("herdr:pi", "pi", Some("new" | "resume" | "fork"))
@@ -3721,6 +3729,75 @@ mod tests {
                 .as_ref()
                 .map(|session| session.session_ref.value.as_str()),
             Some("mastracode-new")
+        );
+    }
+
+    #[test]
+    fn codebuddy_session_start_replaces_current_root_session() {
+        for source in ["startup", "clear", "resume", "compact"] {
+            let mut terminal = test_terminal();
+            terminal.set_detected_state(Some(Agent::Codebuddy), AgentState::Idle);
+            terminal
+                .set_agent_session_ref_for_session_start(
+                    "herdr:codebuddy".into(),
+                    "codebuddy".into(),
+                    crate::agent_resume::AgentSessionRef::id("codebuddy-old"),
+                    Some(20),
+                    Some("startup".into()),
+                )
+                .expect("initial root session");
+
+            let replacement = terminal.set_agent_session_ref_for_session_start(
+                "herdr:codebuddy".into(),
+                "codebuddy".into(),
+                crate::agent_resume::AgentSessionRef::id("codebuddy-new"),
+                Some(21),
+                Some(source.into()),
+            );
+
+            assert!(
+                replacement.is_some_and(|mutation| mutation.session_ref_changed),
+                "{source} should replace the pane's CodeBuddy session"
+            );
+            assert_eq!(
+                terminal
+                    .persisted_agent_session
+                    .as_ref()
+                    .map(|session| session.session_ref.value.as_str()),
+                Some("codebuddy-new")
+            );
+        }
+    }
+
+    #[test]
+    fn codebuddy_session_start_keeps_root_session_for_unknown_source() {
+        let mut terminal = test_terminal();
+        terminal.set_detected_state(Some(Agent::Codebuddy), AgentState::Idle);
+        terminal
+            .set_agent_session_ref_for_session_start(
+                "herdr:codebuddy".into(),
+                "codebuddy".into(),
+                crate::agent_resume::AgentSessionRef::id("codebuddy-old"),
+                Some(20),
+                Some("startup".into()),
+            )
+            .expect("initial root session");
+
+        let replacement = terminal.set_agent_session_ref_for_session_start(
+            "herdr:codebuddy".into(),
+            "codebuddy".into(),
+            crate::agent_resume::AgentSessionRef::id("codebuddy-new"),
+            Some(21),
+            Some("select".into()),
+        );
+
+        assert!(replacement.is_none_or(|mutation| !mutation.session_ref_changed));
+        assert_eq!(
+            terminal
+                .persisted_agent_session
+                .as_ref()
+                .map(|session| session.session_ref.value.as_str()),
+            Some("codebuddy-old")
         );
     }
 

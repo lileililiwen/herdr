@@ -51,6 +51,7 @@ pub enum Agent {
     Cline,
     Omp,
     Mastracode,
+    Codebuddy,
     OpenCode,
     GithubCopilot,
     Kimi,
@@ -68,7 +69,7 @@ pub enum Agent {
 }
 
 impl Agent {
-    pub const ALL: [Self; 24] = [
+    pub const ALL: [Self; 25] = [
         Self::Pi,
         Self::Claude,
         Self::Codex,
@@ -79,6 +80,7 @@ impl Agent {
         Self::Cline,
         Self::Omp,
         Self::Mastracode,
+        Self::Codebuddy,
         Self::OpenCode,
         Self::GithubCopilot,
         Self::Kimi,
@@ -133,6 +135,7 @@ pub fn agent_label(agent: Agent) -> &'static str {
         Agent::Cline => "cline",
         Agent::Omp => "omp",
         Agent::Mastracode => "mastracode",
+        Agent::Codebuddy => "codebuddy",
         Agent::OpenCode => "opencode",
         Agent::GithubCopilot => "copilot",
         Agent::Kimi => "kimi",
@@ -168,6 +171,7 @@ pub fn interactive_agent_executable(agent: Agent) -> &'static str {
         Agent::Cline => "cline",
         Agent::Omp => "omp",
         Agent::Mastracode => "mastracode",
+        Agent::Codebuddy => "codebuddy",
         Agent::OpenCode => "opencode",
         Agent::GithubCopilot => "copilot",
         Agent::Kimi => "kimi",
@@ -208,6 +212,7 @@ fn lookup_agent(name: &str) -> Option<Agent> {
         "cline" | ".cline" => Some(Agent::Cline),
         "omp" => Some(Agent::Omp),
         "mastracode" | "mastra-code" | "mastra code" => Some(Agent::Mastracode),
+        "codebuddy" | "codebuddy-code" | "codebuddy code" => Some(Agent::Codebuddy),
         "opencode" | "opencode2" | "open-code" => Some(Agent::OpenCode),
         "copilot" | "github-copilot" | "ghcs" => Some(Agent::GithubCopilot),
         "kimi" | "kimi-code" | "kimi code" => Some(Agent::Kimi),
@@ -333,6 +338,7 @@ pub(crate) fn full_lifecycle_hook_authority(source: &str, agent_label: &str) -> 
         ("herdr:pi", "pi")
             | ("herdr:omp", "omp")
             | ("herdr:mastracode", "mastracode")
+            | ("herdr:codebuddy", "codebuddy")
             | ("herdr:opencode", "opencode")
             | ("herdr:kilo", "kilo")
             | ("herdr:kimi", "kimi")
@@ -402,7 +408,7 @@ fn normalized_process_name(process: &crate::platform::ForegroundProcess) -> Stri
             {
                 if matches!(
                     identify_agent(&wrapped_agent),
-                    Some(Agent::Qwen | Agent::Cline | Agent::Letta)
+                    Some(Agent::Qwen | Agent::Cline | Agent::Letta | Agent::Codebuddy)
                 ) {
                     return wrapped_agent;
                 }
@@ -748,6 +754,18 @@ fn agent_name_from_known_package_path(path: &str) -> Option<String> {
             return Some(agent_label(Agent::Letta).to_string());
         }
     }
+    // The npm package ships `codebuddy`, `codebuddy-code`, `cbc`, and
+    // `codebuddy-lowmem` launchers that all exec the same bundle. Only the
+    // `codebuddy*` basenames match the alias table, so the shorter launchers
+    // are recognized by their position inside the package.
+    for window in components.windows(5) {
+        if window[..3] == ["node_modules", "@tencent-ai", "codebuddy-code"]
+            && window[3] == "bin"
+            && matches!(window[4].as_str(), "cbc" | "codebuddy-lowmem")
+        {
+            return Some(agent_label(Agent::Codebuddy).to_string());
+        }
+    }
     None
 }
 
@@ -985,6 +1003,9 @@ mod tests {
         assert_eq!(identify_agent("omp"), Some(Agent::Omp));
         assert_eq!(identify_agent("mastracode"), Some(Agent::Mastracode));
         assert_eq!(identify_agent("mastra-code"), Some(Agent::Mastracode));
+        assert_eq!(identify_agent("codebuddy"), Some(Agent::Codebuddy));
+        assert_eq!(identify_agent("codebuddy-code"), Some(Agent::Codebuddy));
+        assert_eq!(identify_agent("CodeBuddy Code"), Some(Agent::Codebuddy));
         assert_eq!(identify_agent("opencode"), Some(Agent::OpenCode));
         assert_eq!(identify_agent("opencode.exe"), Some(Agent::OpenCode));
         assert_eq!(identify_agent("opencode2"), Some(Agent::OpenCode));
@@ -1032,6 +1053,9 @@ mod tests {
         assert_eq!(parse_agent_label("omp"), Some(Agent::Omp));
         assert_eq!(parse_agent_label("mastracode"), Some(Agent::Mastracode));
         assert_eq!(parse_agent_label("mastra code"), Some(Agent::Mastracode));
+        assert_eq!(parse_agent_label("codebuddy"), Some(Agent::Codebuddy));
+        assert_eq!(parse_agent_label("codebuddy-code"), Some(Agent::Codebuddy));
+        assert_eq!(parse_agent_label("codebuddy code"), Some(Agent::Codebuddy));
         assert_eq!(parse_agent_label("opencode.exe"), Some(Agent::OpenCode));
         assert_eq!(parse_agent_label("copilot"), Some(Agent::GithubCopilot));
         assert_eq!(parse_agent_label("kimi-code"), Some(Agent::Kimi));
@@ -1078,6 +1102,7 @@ mod tests {
             (Agent::Cline, "cline"),
             (Agent::Omp, "omp"),
             (Agent::Mastracode, "mastracode"),
+            (Agent::Codebuddy, "codebuddy"),
             (Agent::OpenCode, "opencode"),
             (Agent::GithubCopilot, "copilot"),
             (Agent::Kimi, "kimi"),
@@ -1114,6 +1139,19 @@ mod tests {
             "mastracode"
         ));
         assert!(!Agent::SCREEN_MANIFEST_AGENTS.contains(&Agent::Mastracode));
+    }
+
+    #[test]
+    fn codebuddy_is_hook_authority_without_screen_manifest() {
+        assert!(full_lifecycle_hook_authority(
+            "herdr:codebuddy",
+            "codebuddy"
+        ));
+        assert!(!session_identity_only_integration(
+            "herdr:codebuddy",
+            "codebuddy"
+        ));
+        assert!(!Agent::SCREEN_MANIFEST_AGENTS.contains(&Agent::Codebuddy));
     }
 
     #[test]
@@ -1680,6 +1718,96 @@ mod tests {
             identify_agent_in_job(&job),
             Some((Agent::Pi, "pi".to_string()))
         );
+    }
+
+    #[test]
+    fn identify_agent_in_job_detects_node_wrapped_codebuddy_package_cli() {
+        for (name, argv) in [
+            (
+                "node",
+                vec![
+                    "node",
+                    "/usr/local/lib/node_modules/@tencent-ai/codebuddy-code/bin/codebuddy",
+                ],
+            ),
+            (
+                "MainThread",
+                vec![
+                    "node",
+                    "/home/user/.local/share/fnm/node-versions/v24/installation/lib/node_modules/@tencent-ai/codebuddy-code/bin/codebuddy",
+                ],
+            ),
+            (
+                "node.exe",
+                vec![
+                    "node.exe",
+                    r"C:\Users\herdr\AppData\Roaming\npm\node_modules\@tencent-ai\codebuddy-code\bin\codebuddy",
+                ],
+            ),
+            (
+                "node.exe",
+                vec![
+                    "node.exe",
+                    r"C:\Users\herdr\AppData\Roaming\npm\node_modules\@tencent-ai\codebuddy-code\bin\codebuddy-code",
+                ],
+            ),
+        ] {
+            let job = crate::platform::ForegroundJob {
+                process_group_id: 123,
+                processes: vec![foreground_process(123, name, &argv)],
+            };
+
+            assert_eq!(
+                identify_agent_in_job(&job),
+                Some((Agent::Codebuddy, "codebuddy".to_string())),
+                "argv: {argv:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn identify_agent_in_job_detects_codebuddy_short_launchers() {
+        // `cbc` and `codebuddy-lowmem` are package launchers whose bare
+        // basenames mean nothing on their own; only their position inside the
+        // CodeBuddy package identifies them.
+        for argv in [
+            vec![
+                "node",
+                "/usr/local/lib/node_modules/@tencent-ai/codebuddy-code/bin/cbc",
+            ],
+            vec![
+                "node",
+                "/usr/local/lib/node_modules/@tencent-ai/codebuddy-code/bin/codebuddy-lowmem",
+            ],
+        ] {
+            let job = crate::platform::ForegroundJob {
+                process_group_id: 123,
+                processes: vec![foreground_process(123, "MainThread", &argv)],
+            };
+
+            assert_eq!(
+                identify_agent_in_job(&job),
+                Some((Agent::Codebuddy, "codebuddy".to_string())),
+                "argv: {argv:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn identify_agent_in_job_rejects_unrelated_codebuddy_launchers() {
+        for argv in [
+            vec!["node", "/tmp/codebuddy/bin/cbc"],
+            vec!["node", "/tmp/other-package/node_modules/cbc"],
+            vec!["cbc"],
+            vec!["node", "/home/user/.bin/codebuddy-helper"],
+        ] {
+            let job = crate::platform::ForegroundJob {
+                process_group_id: 123,
+                processes: vec![foreground_process(123, "MainThread", &argv)],
+            };
+
+            assert_eq!(identify_agent_in_job(&job), None, "argv: {argv:?}");
+        }
     }
 
     #[test]

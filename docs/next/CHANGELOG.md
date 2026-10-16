@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- CodeBuddy Code (`codebuddy`) support. Herdr recognizes the agent, and `herdr integration install codebuddy` installs a Claude Code compatible hook into `~/.codebuddy/settings.json` that reports `idle`, `working`, and `blocked` state plus the session id used to resume the same session after a server restart with `codebuddy --resume <id>`. CodeBuddy Code has no screen manifest; state comes from the hook. The install is experimental and CLI-only, like `letta`. (#567)
+
 ## [0.9.5] - 2026-10-14
 
 This is a hotfix release for v0.9.4. See the v0.9.4 notes for the full feature release: https://github.com/herdrdev/herdr/releases/tag/v0.9.4

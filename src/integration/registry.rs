@@ -515,6 +515,23 @@ pub(crate) fn experimental_letta_integration_status() -> Option<super::Experimen
     })
 }
 
+pub(crate) fn experimental_codebuddy_integration_status(
+) -> Option<super::ExperimentalIntegrationStatus> {
+    let path = codebuddy_dir()
+        .ok()?
+        .join("hooks")
+        .join(super::CODEBUDDY_HOOK_INSTALL_NAME);
+    let (state, installed_version) =
+        integration_state_for_path(&path, super::CODEBUDDY_INTEGRATION_VERSION);
+    Some(super::ExperimentalIntegrationStatus {
+        label: "codebuddy",
+        path,
+        state,
+        installed_version,
+        expected_version: super::CODEBUDDY_INTEGRATION_VERSION,
+    })
+}
+
 pub(crate) fn parse_integration_version(content: &str) -> Option<u32> {
     content.lines().find_map(|line| {
         let marker_line = line

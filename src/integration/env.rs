@@ -17,6 +17,9 @@ pub(crate) const KIMI_CODE_HOME_ENV_VAR: &str = "KIMI_CODE_HOME";
 pub(crate) const COPILOT_HOME_ENV_VAR: &str = "COPILOT_HOME";
 pub(crate) const QODERCLI_CONFIG_DIR_ENV_VAR: &str = "QODER_CONFIG_DIR";
 pub(crate) const QWEN_HOME_ENV_VAR: &str = "QWEN_HOME";
+/// The codebuddy CLI's own config-home override for `~/.codebuddy`
+/// (`settings.json`, `hooks/`, `mcp.json`).
+pub(crate) const CODEBUDDY_CONFIG_DIR_ENV_VAR: &str = "CODEBUDDY_CONFIG_DIR";
 pub(crate) const CURSOR_CONFIG_DIR_ENV_VAR: &str = "CURSOR_CONFIG_DIR";
 pub(crate) const ANTIGRAVITY_CLI_CONFIG_DIR_ENV_VAR: &str = "ANTIGRAVITY_CLI_CONFIG_DIR";
 pub(crate) const GROK_CONFIG_DIR_ENV_VAR: &str = "GROK_CONFIG_DIR";
@@ -185,6 +188,13 @@ pub(crate) fn cursor_dir() -> io::Result<PathBuf> {
 
 pub(crate) fn mastracode_dir() -> io::Result<PathBuf> {
     Ok(home_dir()?.join(".mastracode"))
+}
+
+pub(crate) fn codebuddy_dir() -> io::Result<PathBuf> {
+    // The codebuddy CLI resolves its config home as
+    // `CODEBUDDY_CONFIG_DIR || ~/.codebuddy`, so the hook install lands where
+    // codebuddy reads `settings.json` from.
+    config_dir_from_env_or_home(CODEBUDDY_CONFIG_DIR_ENV_VAR, &[".codebuddy"])
 }
 
 pub(crate) fn antigravity_cli_dir() -> io::Result<PathBuf> {

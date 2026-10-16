@@ -12,7 +12,8 @@ mod types;
 mod version;
 
 pub(crate) use actions::{
-    install_experimental_letta, install_target, uninstall_experimental_letta, uninstall_target,
+    install_experimental_codebuddy, install_experimental_letta, install_target,
+    uninstall_experimental_codebuddy, uninstall_experimental_letta, uninstall_target,
 };
 #[cfg(test)]
 pub(crate) use env::integration_env_lock;
@@ -20,8 +21,9 @@ pub(crate) use env::{
     apply_pane_base_env, HERDR_PANE_ID_ENV_VAR, HERDR_TAB_ID_ENV_VAR, HERDR_WORKSPACE_ID_ENV_VAR,
 };
 pub(crate) use registry::{
-    experimental_letta_integration_status, installed_integration_statuses,
-    integration_recommendations, integration_target_label, print_outdated_update_notice,
+    experimental_codebuddy_integration_status, experimental_letta_integration_status,
+    installed_integration_statuses, integration_recommendations, integration_target_label,
+    print_outdated_update_notice,
 };
 pub(crate) use types::{
     ExperimentalIntegrationStatus, IntegrationRecommendation, IntegrationStatus,
@@ -31,7 +33,7 @@ pub(crate) use types::{
 /// CLI labels for experimental integrations that are intentionally not part of
 /// the frozen client endpoint `IntegrationTarget` enum. Empty this list once the
 /// agent registry provides first-class target registration.
-pub(crate) const EXPERIMENTAL_INTEGRATION_TARGET_LABELS: &[&str] = &["letta"];
+pub(crate) const EXPERIMENTAL_INTEGRATION_TARGET_LABELS: &[&str] = &["letta", "codebuddy"];
 
 const PI_EXTENSION_INSTALL_NAME: &str = "herdr-agent-state.ts";
 const PI_EXTENSION_ASSET: &str = include_str!("assets/pi/herdr-agent-state.ts");
@@ -307,6 +309,41 @@ const MASTRACODE_HOOK_EVENTS: [(&str, &str); 11] = [
     ("Interrupt", "idle"),
     ("AgentEnd", "idle"),
     ("Stop", "idle"),
+];
+const CODEBUDDY_HOOK_INSTALL_NAME: &str = if cfg!(windows) {
+    "herdr-agent-state.ps1"
+} else {
+    "herdr-agent-state.sh"
+};
+const CODEBUDDY_HOOK_ASSET: &str = if cfg!(windows) {
+    include_str!("assets/codebuddy/herdr-agent-state.ps1")
+} else {
+    include_str!("assets/codebuddy/herdr-agent-state.sh")
+};
+const CODEBUDDY_INTEGRATION_VERSION: u32 = 1;
+/// CodeBuddy Code hook entries are Claude Code compatible and read `timeout`
+/// as seconds (default 60), so a 10 second ceiling matches the other
+/// settings.json integrations without outliving a turn.
+const CODEBUDDY_HOOK_TIMEOUT_SEC: u64 = 10;
+/// CodeBuddy Code follows the Claude Code hook contract: same event names,
+/// same stdin payload, same settings.json entry shape. State is hook-owned
+/// because CodeBuddy has no screen manifest, so every lifecycle transition
+/// that Herdr can name gets an entry.
+const CODEBUDDY_HOOK_EVENTS: [(&str, &str); 14] = [
+    ("SessionStart", "session"),
+    ("UserPromptSubmit", "working"),
+    ("PreToolUse", "working"),
+    ("PostToolUse", "working"),
+    ("PostToolUseFailure", "working"),
+    ("PermissionRequest", "blocked"),
+    ("PermissionDenied", "working"),
+    ("Elicitation", "blocked"),
+    ("ElicitationResult", "working"),
+    ("SubagentStart", "working"),
+    ("PreCompact", "working"),
+    ("StopFailure", "idle"),
+    ("Stop", "idle"),
+    ("SessionEnd", "idle"),
 ];
 const GROK_HOOK_INSTALL_NAME: &str = if cfg!(windows) {
     "herdr-agent-state.ps1"
