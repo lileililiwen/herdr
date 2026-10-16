@@ -1,5 +1,8 @@
 # herdr
 
+> **Fork note:** this fork (`lileililiwen/herdr`) adds native [CodeBuddy Code](CODEBUDDY.md)
+> support (`codebuddy`) on top of upstream `herdrdev/herdr`. See [CODEBUDDY.md](CODEBUDDY.md)
+> for the feature, install, build, and verification details.
 
 <p align="center">
   <img src="assets/logo.png" alt="herdr" width="100" />
