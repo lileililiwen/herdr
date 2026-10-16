@@ -1,6 +1,6 @@
 ---
 title: インテグレーション
-description: Pi、OMP、Claude Code、Codex、GitHub Copilot CLI、Devin CLI、Droid、Kimi Code CLI、OpenCode、Kilo Code CLI、Hermes Agent、Qoder CLI、Qwen Code、Letta Code、Cursor Agent CLI、MastraCode、Antigravity CLI、Grok CLI 向けの Herdr インテグレーションをインストールします。
+description: Pi、OMP、Claude Code、Codex、GitHub Copilot CLI、Devin CLI、Droid、Kimi Code CLI、OpenCode、Kilo Code CLI、Hermes Agent、Qoder CLI、Qwen Code、Letta Code、Cursor Agent CLI、MastraCode、CodeBuddy Code、Antigravity CLI、Grok CLI 向けの Herdr インテグレーションをインストールします。
 ---
 
 Herdr は対応するエージェントを自動的に検出します。エージェントのインテグレーションをインストールすると、サーバーの再起動後に Herdr が同じセッションを resume できます。一部のインテグレーションはエージェントの状態も直接報告します。Herdr が対応するエージェントと、自ら Herdr に対応するエージェントについては[エージェント](/ja/docs/agents/)を参照してください。
@@ -24,6 +24,7 @@ herdr integration install opencode
 herdr integration install kilo
 herdr integration install hermes
 herdr integration install mastracode
+herdr integration install codebuddy
 herdr integration install qodercli
 herdr integration install qwen
 herdr integration install letta
@@ -47,6 +48,7 @@ herdr integration uninstall opencode
 herdr integration uninstall kilo
 herdr integration uninstall hermes
 herdr integration uninstall mastracode
+herdr integration uninstall codebuddy
 herdr integration uninstall qodercli
 herdr integration uninstall qwen
 herdr integration uninstall letta
@@ -61,9 +63,9 @@ Herdr は Linux/macOS の統合設定と全プラットフォームの新規フ�
 
 どのインテグレーションも、エージェントが今どのセッションにいるかを Herdr に伝えるので、サーバーの再起動後に Herdr がそのセッションを resume できます。`[session] resume_agents_on_restore = false` で無効にできます。
 
-Pi、OMP、Kimi Code CLI、OpenCode、Kilo Code CLI、MastraCode のインテグレーションは、エージェントの状態も報告します。報告している間、Herdr は画面を読む代わりにその報告を使います。その他のインテグレーションでは、状態は画面検出に任せます。
+Pi、OMP、Kimi Code CLI、OpenCode、Kilo Code CLI、MastraCode、CodeBuddy Code のインテグレーションは、エージェントの状態も報告します。報告している間、Herdr は画面を読む代わりにその報告を使います。その他のインテグレーションでは、状態は画面検出に任せます。
 
-エージェントネイティブのセッション復元には最新の Herdr インテグレーションが必要です: Pi インテグレーションはバージョン `2`、OMP は `3`、Claude Code は `6`、Codex は `5`、GitHub Copilot CLI は `2`、Devin CLI は `2`、Droid は `2`、Kimi Code CLI は `3`、Qoder CLI は `2`、Qwen Code は `1`、Letta Code は `1`、Cursor Agent CLI は `1`、Grok CLI は `2`、OpenCode は `5`、Kilo Code CLI は `1`、Hermes Agent は `5`、MastraCode は `1`、Antigravity CLI は `1` です。インストール済みバージョンは `herdr integration status` で確認してください。
+エージェントネイティブのセッション復元には最新の Herdr インテグレーションが必要です: Pi インテグレーションはバージョン `2`、OMP は `3`、Claude Code は `6`、Codex は `5`、GitHub Copilot CLI は `2`、Devin CLI は `2`、Droid は `2`、Kimi Code CLI は `3`、Qoder CLI は `2`、Qwen Code は `1`、Letta Code は `1`、Cursor Agent CLI は `1`、Grok CLI は `2`、OpenCode は `5`、Kilo Code CLI は `1`、Hermes Agent は `5`、MastraCode は `1`、CodeBuddy Code は `1`、Antigravity CLI は `1` です。インストール済みバージョンは `herdr integration status` で確認してください。
 
 ## 独自エージェントを統合する
 
@@ -302,6 +304,22 @@ herdr integration install mastracode
 Herdr は `~/.mastracode` を使います。インストールは `hooks/herdr-agent-state.sh`（Windows では `hooks/herdr-agent-state.ps1`）を書き込み、`hooks.json` に Herdr のコマンドエントリを追加します。ディレクトリがなければ作成します。アンインストールは一致するフックエントリを削除し、フックスクリプトを削除します。
 
 Herdr は保存された MastraCode スレッドを `mastracode --thread <id>` で resume します。
+
+## CodeBuddy Code
+
+CodeBuddy Code インテグレーションのインストールは実験的で CLI 専用です。設定のインテグレーション画面や JSON インテグレーション API には表示されません。`herdr integration status` は `codebuddy (experimental)` として報告します。エージェント検出と `herdr agent start --kind codebuddy` はこのインストール制限とは独立してサポートされます。
+
+CodeBuddy Code フックをインストールします:
+
+```bash
+herdr integration install codebuddy
+```
+
+CodeBuddy Code のフックは Claude Code のフック契約に従うため、インストールしたフックはライフサイクル状態とセッション識別を Herdr に報告し、権威ある `idle`、`working`、`blocked` 状態とネイティブ復元を提供します。CodeBuddy Code にはスクリーンマニフェストのフォールバックはありません。CodeBuddy Code が Herdr ペイン内で動いている間、状態はフックから得られます。
+
+Herdr は `~/.codebuddy`（`CODEBUDDY_CONFIG_DIR` が設定されていればそれ）を使います。インストールは `hooks/herdr-agent-state.sh`（Windows では `hooks/herdr-agent-state.ps1`）を書き込み、`settings.json` に `SessionStart`、`UserPromptSubmit`、`PreToolUse`、`PostToolUse`、`PermissionRequest`、`Elicitation`、`Stop`、`SessionEnd` などのライフサイクルイベント用の Herdr フックエントリを登録します。ディレクトリがなければ作成します。アンインストールは一致するフックエントリを削除し、フックスクリプトを削除します。
+
+Herdr は保存された CodeBuddy セッションを `codebuddy --resume <id>` で resume します。
 
 ## Antigravity CLI
 

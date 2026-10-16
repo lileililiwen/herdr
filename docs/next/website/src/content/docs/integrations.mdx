@@ -1,6 +1,6 @@
 ---
 title: Integrations
-description: Install Herdr integrations for Pi, OMP, Claude Code, Codex, GitHub Copilot CLI, Devin CLI, Droid, Kimi Code CLI, OpenCode, Kilo Code CLI, Hermes Agent, Qoder CLI, Qwen Code, Letta Code, Cursor Agent CLI, MastraCode, Antigravity CLI, and Grok CLI.
+description: Install Herdr integrations for Pi, OMP, Claude Code, Codex, GitHub Copilot CLI, Devin CLI, Droid, Kimi Code CLI, OpenCode, Kilo Code CLI, Hermes Agent, Qoder CLI, Qwen Code, Letta Code, Cursor Agent CLI, MastraCode, CodeBuddy Code, Antigravity CLI, and Grok CLI.
 ---
 
 Herdr detects the agents it supports automatically. Install an agent's integration so Herdr can resume the same session after a server restart. Some integrations also report the agent's state directly. See [Agents](/docs/agents/) for which agents Herdr supports and which support Herdr themselves.
@@ -26,6 +26,7 @@ herdr integration install qwen
 herdr integration install letta
 herdr integration install cursor
 herdr integration install mastracode
+herdr integration install codebuddy
 herdr integration install antigravity-cli
 herdr integration install grok
 ```
@@ -49,6 +50,7 @@ herdr integration uninstall qwen
 herdr integration uninstall letta
 herdr integration uninstall cursor
 herdr integration uninstall mastracode
+herdr integration uninstall codebuddy
 herdr integration uninstall antigravity-cli
 herdr integration uninstall grok
 ```
@@ -59,9 +61,9 @@ Herdr saves integration configs atomically on Linux/macOS and for new files; exi
 
 Every integration tells Herdr which session the agent is in, so Herdr can resume it after a server restart. Turn this off with `[session] resume_agents_on_restore = false`.
 
-The Pi, OMP, Kimi Code CLI, OpenCode, Kilo Code CLI, and MastraCode integrations also report the agent's state. While they report, Herdr uses them instead of reading the screen. The others leave state to screen detection.
+The Pi, OMP, Kimi Code CLI, OpenCode, Kilo Code CLI, MastraCode, and CodeBuddy Code integrations also report the agent's state. While they report, Herdr uses them instead of reading the screen. The others leave state to screen detection.
 
-Native session restore requires current Herdr integrations: Pi integration version `2`, OMP version `3`, Claude Code version `6`, Codex version `5`, GitHub Copilot CLI version `2`, Devin CLI version `2`, Droid version `2`, Kimi Code CLI version `3`, Qoder CLI version `2`, Qwen Code version `1`, Letta Code version `1`, Cursor Agent CLI version `1`, Grok CLI version `2`, OpenCode version `5`, Kilo Code CLI version `1`, Hermes Agent version `5`, MastraCode version `1`, or Antigravity CLI version `1`. Check installed versions with `herdr integration status`.
+Native session restore requires current Herdr integrations: Pi integration version `2`, OMP version `3`, Claude Code version `6`, Codex version `5`, GitHub Copilot CLI version `2`, Devin CLI version `2`, Droid version `2`, Kimi Code CLI version `3`, Qoder CLI version `2`, Qwen Code version `1`, Letta Code version `1`, Cursor Agent CLI version `1`, Grok CLI version `2`, OpenCode version `5`, Kilo Code CLI version `1`, Hermes Agent version `5`, MastraCode version `1`, CodeBuddy Code version `1`, or Antigravity CLI version `1`. Check installed versions with `herdr integration status`.
 
 ## Integrate your own agent
 
@@ -300,6 +302,22 @@ The hook reports MastraCode lifecycle state and thread identity to Herdr for aut
 Herdr uses `~/.mastracode`. Install writes `hooks/herdr-agent-state.sh` (`hooks/herdr-agent-state.ps1` on Windows) and adds Herdr command entries to `hooks.json`, creating the directory when missing. Uninstall removes the matching hook entries and deletes the hook script.
 
 Herdr resumes stored MastraCode threads with `mastracode --thread <id>`.
+
+## CodeBuddy Code
+
+CodeBuddy Code integration installation is experimental and CLI-only. It is not listed in the Settings integration screen or the JSON integration API. `herdr integration status` reports it as `codebuddy (experimental)`. Agent detection and `herdr agent start --kind codebuddy` are supported independently of this installation restriction.
+
+Install the CodeBuddy Code hook:
+
+```bash
+herdr integration install codebuddy
+```
+
+CodeBuddy Code hooks follow the Claude Code hook contract, so the installed hook reports lifecycle state and session identity to Herdr for authoritative `idle`, `working`, and `blocked` status and native restore. CodeBuddy Code has no screen manifest fallback; state comes from the hook while CodeBuddy Code runs inside a Herdr pane.
+
+Herdr uses `~/.codebuddy`, or `CODEBUDDY_CONFIG_DIR` when set. Install writes `hooks/herdr-agent-state.sh` (`hooks/herdr-agent-state.ps1` on Windows) and registers Herdr hook entries for `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PermissionRequest`, `Elicitation`, `Stop`, `SessionEnd`, and the other lifecycle events in `settings.json`, creating the directory when missing. Uninstall removes the matching hook entries and deletes the hook script.
+
+Herdr resumes stored CodeBuddy sessions with `codebuddy --resume <id>`.
 
 ## Antigravity CLI
 
